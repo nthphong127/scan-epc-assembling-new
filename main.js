@@ -77,16 +77,7 @@ app.on("window-all-closed", () => {
   }
 });
 
-// ipcMain.handle("check-db-connection", async () => {
-// try {
-// const pool = await sql.connect(config);
-// // await sql.close();
-// return { success: true, message: "Database connected" };
-// } catch (error) {
-// return { success: false, message: error.message };
-// }
-// });
-// Hàm xử lý gọi thủ tục lưu trữ qua IPC
+
 console.log("Database Server:", config.server);
 ipcMain.handle(
   "call-stored-procedure",
@@ -120,8 +111,8 @@ ipcMain.handle("get-data-count", async (event, factoryCode, stationNo) => {
      DECLARE @DayNow DATETIME = CAST(GETDATE() AS DATE);
 
         SELECT COUNT(DISTINCT dv_RFIDrecordmst.EPC_Code) AS dataCounts
-FROM dv_RFIDrecordmst
-WHERE 
+    FROM dv_RFIDrecordmst
+    WHERE 
     FC_server_code = @FactoryCode
     AND record_time > @DayNow
     AND stationNO = @StationNo;
@@ -174,14 +165,21 @@ WHERE
 });
 const fs = require("fs"); // Import module file system
 
-const logDir = path.join(__dirname, "log"); // Đường dẫn thư mục log
-const logFilePath = path.join(logDir, "epc_success.log"); // Đường dẫn file log
+const logDir = path.join(__dirname, "log");
+function getCurrentDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+const logFilePath = path.join(logDir, `epc_success_${getCurrentDateString()}.log`);
 
 // Kiểm tra nếu thư mục log chưa tồn tại thì tạo mới
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
-  console.log("Created log directory:", logDir);
-}
+// if (!fs.existsSync(logDir)) {
+//   fs.mkdirSync(logDir, { recursive: true });
+//   console.log("Created log directory:", logDir);
+// }
 ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
   if (!isOnline) {
     try {
@@ -208,9 +206,7 @@ ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
 
   // Nếu online, xử lý logic SQL Server
   try {
-   
-    
-    
+
     const pool = await sql.connect(config);
     const result = await pool
       .request()
@@ -221,17 +217,18 @@ ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
 
     // Nếu stored procedure chạy thành công
     if (result.returnValue === 1) {
-      const logEntry = `[${new Date().toISOString()}] EPC Scan Success: ${epc}\n`;
-
-      // Kiểm tra nếu thư mục log chưa tồn tại thì tạo mới (phòng khi có lỗi xóa thư mục)
+      const logEntry = {
+        epc: epc,
+        record_time: new Date().toLocaleString()
+      };
+      // Kiểm tra nếu thư mục log chưa tồn tại thì tạo mới
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
-
-      // Ghi log vào file
-      fs.appendFileSync(logFilePath, logEntry);
-      console.log("Logged EPC to file:", epc);
+      // Ghi log dạng JSON (mỗi log 1 dòng)
+      // fs.appendFileSync(logFilePath, JSON.stringify(logEntry) + '\n');
     }
+    
 
     return { success: true, returnValue: result.returnValue };
   } catch (err) {

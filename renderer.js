@@ -4,8 +4,79 @@ const { ipcRenderer } = require("electron");
 var tableBody = document.getElementById("table-body");
 let isNotificationVisible = false;
 const Datastore = require("nedb");
-const errorDb = new Datastore({ filename: "errors.db", autoload: true });
-const lastDb = new Datastore({ filename: "last.db", autoload: true });
+const path = require("path");
+const fs = require("fs");
+
+// Đường dẫn tới thư mục db và log
+const logDir = path.join(__dirname, "logs");
+const dbDir = path.join(__dirname, "db");
+
+// Hàm lấy ngày hiện tại dạng YYYY-MM-DD
+function getTodayDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Hàm định dạng lại thời gian theo kiểu "YYYY-MM-DD HH:mm:ss.SSS"
+function formatDate(date) {
+  const pad = (num, size = 2) => String(num).padStart(size, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+         `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
+// Hàm ghi log vào file
+function logToFile(filePath, message) {
+  const logEntry = {
+    message,
+    timestamp: formatDate(new Date())
+  };
+  fs.appendFileSync(filePath, JSON.stringify(logEntry) + '\n');
+}
+
+// Hàm xóa các file log cũ hơn 3 ngày
+function cleanOldLogs() {
+  const todayStr = getTodayDateStr();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 3);  // 3 ngày trước
+
+  fs.readdirSync(logDir).forEach(file => {
+    if (file.endsWith(".log")) {
+      const fileDateStr = file.split('_')[1].split('.')[0];  // Lấy ngày từ tên file (ví dụ: epc_success_2025-05-05.log)
+      const fileDate = new Date(fileDateStr);
+
+      if (fileDate < cutoffDate) {
+        fs.unlinkSync(path.join(logDir, file));  // Xóa file cũ
+        console.log("Đã xóa file log cũ:", file);
+      }
+    }
+  });
+}
+
+// Tạo thư mục db và logs nếu chưa có
+if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+
+// Xóa các file DB cũ không phải ngày hôm nay
+fs.readdirSync(dbDir).forEach(file => {
+  const todayStr = getTodayDateStr();
+  if (!file.includes(todayStr) && file.endsWith(".db")) {
+    fs.unlinkSync(path.join(dbDir, file));
+    console.log("Đã xóa file DB cũ:", file);
+  }
+});
+
+// Tạo các DB file theo ngày
+const errorDb = new Datastore({ filename: path.join(dbDir, `errors_${getTodayDateStr()}.db`), autoload: true });
+const lastDb = new Datastore({ filename: path.join(dbDir, `last_${getTodayDateStr()}.db`), autoload: true });
+const db = new Datastore({ filename: path.join(dbDir, `epc_success_${getTodayDateStr()}.db`), autoload: true });
+
+// Tạo các file log theo ngày
+const successLogFile = path.join(logDir, `epc_success_${getTodayDateStr()}.log`);
+const failLogFile = path.join(logDir, `epc_fail_${getTodayDateStr()}.log`);
+
+// Xóa các file log cũ hơn 3 ngày
+cleanOldLogs();
+
 let lastList = [];
 
 
@@ -30,15 +101,7 @@ function checkOnlineStatus() {
           networkButton.classList.remove("online");
           networkButton.classList.add("offline");
           ipcRenderer.send("network-status", false);
-          // if (!isNotificationVisible) {
-          //   isNotificationVisible = true; // Đánh dấu là thông báo đang được hiển thị
-          //   ipcRenderer
-          //     .invoke(
-          //       "show-confirm-dialog",
-          //       `Đường truyền mạng đang có vấn đề, hãy thử lại lần nữa, nếu tình trạng vẫn tiếp diễn, vui lòng thông báo bộ phận hỗ trợ !`
-          //     )
-          //     .then(() => {});
-          // }
+   
         }
       })
       .catch(() => {
@@ -46,30 +109,13 @@ function checkOnlineStatus() {
         networkButton.classList.remove("online");
         networkButton.classList.add("offline");
         ipcRenderer.send("network-status", false); // Gửi trạng thái offline
-        // if (!isNotificationVisible) {
-        //   isNotificationVisible = true; // Đánh dấu là thông báo đang được hiển thị
-        //   ipcRenderer
-        //     .invoke(
-        //       "show-confirm-dialog",
-        //       `Đường truyền mạng đang có vấn đề, nếu tình trạng vẫn tiếp diễn, vui lòng thông báo bộ phận hỗ trợ !`
-        //     )
-        //     .then(() => {});
-        // }
+   
       });
   } else {
     statusElement.innerText = "Mất kết nối internet";
     networkButton.classList.remove("online");
     networkButton.classList.add("offline");
     ipcRenderer.send("network-status", false); // Gửi trạng thái offline
-    // if (!isNotificationVisible) {
-    //   isNotificationVisible = true; // Đánh dấu là thông báo đang được hiển thị
-    //   ipcRenderer
-    //     .invoke(
-    //       "show-confirm-dialog",
-    //       `Đường truyền mạng đang có vấn đề, nếu tình trạng vẫn tiếp diễn, vui lòng thông báo bộ phận hỗ trợ !`
-    //     )
-    //     .then(() => {});
-    // }
   }
 }
 
@@ -255,10 +301,6 @@ epcCodeInput.addEventListener("input", () => {
         .then((result) => {
           console.log("Stored procedure result:", result);
           if (result.success && result.returnValue == 0) {
-            // ipcRenderer.invoke(
-            //   "show-confirm-dialog",
-            //   `Tem quét chưa được phối hoặc bị lỗi : ${epcCode}`
-            // );
             const notification = document.createElement("div");
             notification.className = "notification error";
             notification.innerText = `Tem quét chưa được phối hoặc bị lỗi: ${epcCode}`;
@@ -268,34 +310,8 @@ epcCodeInput.addEventListener("input", () => {
             setTimeout(() => {
               notification.remove();
             }, 5000);
-
-            // Thêm vào NeDB
-            errorDb.find({ epcCode }, (err, docs) => {
-              if (err) {
-                console.error("Failed to query database:", err);
-              } else if (docs.length > 0) {
-                // Nếu epcCode đã tồn tại
-                console.log(
-                  `EPC ${epcCode} đã tồn tại trong cơ sở dữ liệu, không thêm nữa.`
-                );
-              } else {
-                // Nếu epcCode chưa tồn tại, tiến hành thêm mới
-                const errorEntry = {
-                  epcCode,
-                  timestamp: new Date().toISOString(),
-                };
-                errorDb.insert(errorEntry, (err, newDoc) => {
-                  if (err) {
-                    console.error("Failed to save error to database:", err);
-                  } else {
-                    console.log("Error saved to database:", newDoc);
-                  }
-                });
-                updateErrorCount(); // Cập nhật số lượng
-              }
-            });
-
             errorList.push(epcCode);
+            logToFile(failLogFile, `EPC ${epcCode}`);
 
             return;
           }
@@ -304,38 +320,38 @@ epcCodeInput.addEventListener("input", () => {
             notification.className = "notification error";
             notification.innerText = `Tem đã được quét vào ngày trước đó : ${epcCode}`;
             document.body.appendChild(notification);
-
-            lastDb.find({ epcCode }, (err, docs) => {
-              if (err) {
-                console.error("Failed to query database:", err);
-              } else if (docs.length > 0) {
-                // Nếu epcCode đã tồn tại
-                console.log(
-                  `EPC ${epcCode} đã tồn tại trong cơ sở dữ liệu, không thêm nữa.`
-                );
-              } else {
-                // Nếu epcCode chưa tồn tại, tiến hành thêm mới
-                const lastEntry = {
-                  epcCode,
-                  timestamp: new Date().toISOString(),
-                };
-                lastDb.insert(lastEntry, (err, newDoc) => {
-                  if (err) {
-                    console.error("Failed to save error to database:", err);
-                  } else {
-                    console.log("Error saved to database:", newDoc);
-                  }
-                });
-                updateLastCount(); // Cập nhật số lượng
-              }
-            });
-
+          
             lastList.push(epcCode);
-
+          
+            // Ghi log vào file epc_duplicate.log
+            logToFile(failLogFile, `EPC ${epcCode}`);
+          
             setTimeout(() => {
               notification.remove();
             }, 5000);
           }
+          if (result.success && result.returnValue === 1) {
+            saveEpcIfNew(epcCode, (err, isNew, doc) => {
+              if (err) {
+                console.error("Lỗi khi lưu DB:", err);
+                return;
+              }
+              if (!isNew) {
+                // Đã quét rồi, hiển thị thông báo
+                const notification = document.createElement("div");
+                notification.className = "notification error";
+                notification.innerText = `Tem đã được quét trong hôm nay: ${epcCode} (Lúc: ${doc.record_time})`;
+                document.body.appendChild(notification);
+                lastList.push(epcCode);
+                setTimeout(() => {
+                  notification.remove();
+                }, 5000);
+              } else {
+                logToFile(successLogFile, `${epcCode}`);
+              }
+            });
+          }
+          
           renderTable();
           fetchDataCount();
           fetchDataCountCus();
@@ -729,3 +745,30 @@ function removeLast(id) {
     }
   });
 }
+
+function formatDate(date) {
+  const pad = (num, size = 2) => String(num).padStart(size, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+         `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
+function saveEpcIfNew(epc, callback) {
+  db.findOne({ epc }, (err, doc) => {
+    if (err) return callback(err);
+
+    if (doc) {
+      // Đã tồn tại
+      callback(null, false, doc);
+    } else {
+      const record = {
+        epc,
+        record_time: formatDate(new Date())
+      };
+      db.insert(record, (err, newDoc) => {
+        if (err) return callback(err);
+        callback(null, true, newDoc);
+      });
+    }
+  });
+}
+
