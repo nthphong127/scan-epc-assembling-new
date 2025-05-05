@@ -1,0 +1,17 @@
+1.0.0
+
+1.0.1 : - Chỉnh sửa logic xóa theo keyid
+
+1.0.2 : - Tối ưu hiệu năng quét tem , tránh bị tràn input khi mạng có vấn đề .
+
+1.0.2a : - Hiển thị thông báo khi mất mạng, update logic check kết nối internet
+
+1.0.3  : - Thêm lôgic khi tem lỗi sẽ lưu vào bảng, cuối ngày xóa
+
+1.0.3a  : - Chỉnh lại hiển thị thông báo lỗi 
+
+1.0.3b  : - Fix bug : đủ 24 ký tự mới quét , và sau 1 ngày sẽ xóa data error theo logic mới
+
+1.0.3c : - Fix bug thêm xóa theo stationNO
+
+1.0.3d : - Thêm nút hiển thị tem cũ
