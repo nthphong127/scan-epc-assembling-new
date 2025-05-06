@@ -18,21 +18,21 @@ console.log("DB_HOST:", process.env.DB_HOST); // Output sau khi build
 var stationNos = process.env.STATION_NO;
 var factoryCodes = process.env.FACTORY_CODE;
 var stationNoCus = process.env.STATION_NO_CUS;
-const os = require('os');
+const os = require("os");
 
 function getLocalIP() {
-    const interfaces = os.networkInterfaces();
-    for (const interfaceName in interfaces) {
-        for (const net of interfaces[interfaceName]) {
-            // Chỉ lấy IPv4 và bỏ qua địa chỉ loopback
-            if (net.family === 'IPv4' && !net.internal) {
-                return net.address;
-            }
-        }
+  const interfaces = os.networkInterfaces();
+  for (const interfaceName in interfaces) {
+    for (const net of interfaces[interfaceName]) {
+      // Chỉ lấy IPv4 và bỏ qua địa chỉ loopback
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
     }
-    return stationNos + '-sync-offline';
+  }
+  return stationNos + "-sync-offline";
 }
-var ipLocal = getLocalIP();// get ip local address
+var ipLocal = getLocalIP(); // get ip local address
 // Cấu hình kết nối SQL Server
 const config = {
   user: process.env.DB_USERNAME,
@@ -76,7 +76,6 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
-
 
 console.log("Database Server:", config.server);
 ipcMain.handle(
@@ -169,11 +168,14 @@ const logDir = path.join(__dirname, "log");
 function getCurrentDateString() {
   const now = new Date();
   const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-const logFilePath = path.join(logDir, `epc_success_${getCurrentDateString()}.log`);
+const logFilePath = path.join(
+  logDir,
+  `epc_success_${getCurrentDateString()}.log`
+);
 
 // Kiểm tra nếu thư mục log chưa tồn tại thì tạo mới
 // if (!fs.existsSync(logDir)) {
@@ -206,7 +208,6 @@ ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
 
   // Nếu online, xử lý logic SQL Server
   try {
-
     const pool = await sql.connect(config);
     const result = await pool
       .request()
@@ -219,7 +220,7 @@ ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
     if (result.returnValue === 1) {
       const logEntry = {
         epc: epc,
-        record_time: new Date().toLocaleString()
+        record_time: new Date().toLocaleString(),
       };
       // Kiểm tra nếu thư mục log chưa tồn tại thì tạo mới
       if (!fs.existsSync(logDir)) {
@@ -228,7 +229,6 @@ ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
       // Ghi log dạng JSON (mỗi log 1 dòng)
       // fs.appendFileSync(logFilePath, JSON.stringify(logEntry) + '\n');
     }
-    
 
     return { success: true, returnValue: result.returnValue };
   } catch (err) {
@@ -246,9 +246,12 @@ ipcMain.handle(
       const pool = await sql.connect(config);
 
       const query = `
+      DECLARE @DayNow DATETIME = CAST(GETDATE() AS DATE);
+
     SELECT TOP 10 r.EPC_Code, r.size_code, r.mo_no , r.matchkeyid
 FROM dv_RFIDrecordmst r
 WHERE StationNo LIKE @StationNo
+  AND record_time > @DayNow
 ORDER BY COALESCE(r.updated, r.record_time) DESC;
 
 `;

@@ -15,3 +15,5 @@
 1.0.3c : - Fix bug thêm xóa theo stationNO
 
 1.0.3d : - Thêm nút hiển thị tem cũ
+
+1.0.4 : - Update log and logic
