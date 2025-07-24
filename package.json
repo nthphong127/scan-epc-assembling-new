@@ -33,7 +33,8 @@
       "errors.db",
       "node_modules/**/*",
       "dist/**/*",
-      "assets/*"
+      "assets/*",
+      "lang/*"
     ],
     "win": {
       "target": [

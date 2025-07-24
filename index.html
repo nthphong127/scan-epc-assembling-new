@@ -9,13 +9,13 @@
     <div id="error-modal" class="modal" style="display: none">
       <div class="modal-content">
         <span class="close-btn">&times;</span>
-        <h3>Danh sách tem lỗi</h3>
+        <h3 id="list-error"></h3>
         <div id="error-list">
           <table>
             <thead>
               <tr>
-                <th>Tem</th>
-                <th>Chức năng</th>
+                <th>EPC</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="error-table-body"></tbody>
@@ -27,13 +27,13 @@
     <div id="last-modal" class="modal" style="display: none">
       <div class="modal-content">
         <span class="close-last-btn">&times;</span>
-        <h3>Danh sách tem đã quét trước đây</h3>
+        <h3 id ="epc-scanned"></h3>
         <div id="last-list">
           <table>
             <thead>
               <tr>
-                <th>Tem</th>
-                <th>Chức năng</th>
+                <th>EPC</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="last-table-body"></tbody>
@@ -71,11 +71,11 @@
         <img src="./assets/logo.png" alt="" />
       </div>
       <div class="box-1-imgbox">
-        <h2>TRẠM A</h2>
+        <h2>Station</h2>
       </div>
       <div class="box-1-imgbox-check">
         <div id="networkButton">
-          <div id="status">Đang kiểm tra kết nối...</div>
+          <div id="status"></div>
         </div>
         <!-- <div id="db-status">Checking database...</div> -->
         <div id="timer"></div>
@@ -87,11 +87,11 @@
         <div class="box-1-text">
           <!-- <button id="call-procedure-btn">Call Stored Procedure</button> -->
           <div class="box-1-text-top">
-            <h3>Số lượng đóng gói</h3>
+            <h3 id="qty-cus"></h3>
             <h3 id="data-count-cus">Loading...</h3>
           </div>
           <div class="box-1-text-bot">
-            <h3>Số lượng tiêu chuẩn</h3>
+            <h3 id="qty-count"></h3> <!-- Số lượng tiêu chuẩn -->
             <h3 id="data-count">Loading...</h3>
           </div>
         </div>
@@ -99,10 +99,11 @@
       <div class="box-2">
         <div class="error-epc-btn-div">
           <button class="last-epc-btn">
-            Tem cũ <span id="last-count">0</span>
+            <span  id="epc-pre"></span> <span id="last-count">0</span>
           </button>
+          <h2> <span id="qty-target"></span> <span id="target-count">0</span></h2>
           <button class="error-epc-btn">
-            Tem lỗi <span id="error-count">0</span>
+            <span id="epc-error"></span> <span id="error-count">0</span>
           </button>
         </div>
         <div class="box-2-epc">
@@ -112,10 +113,10 @@
         <table>
           <thead>
             <tr>
-              <th>EPC CODE</th>
-              <th>Size</th>
-              <th>Mono</th>
-              <th>Action</th>
+              <th>EPC</th>
+              <th id="Size"></th>
+              <th id="Mono"></th>
+              <th id="Action"></th>
             </tr>
           </thead>
           <tbody id="table-body"></tbody>

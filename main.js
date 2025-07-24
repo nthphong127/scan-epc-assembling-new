@@ -14,7 +14,6 @@ const db = new Datastore({ filename: dbPath, autoload: true });
 
 require("dotenv").config({ path: `${__dirname}/.env` });
 
-console.log("DB_HOST:", process.env.DB_HOST); // Output sau khi build
 var stationNos = process.env.STATION_NO;
 var factoryCodes = process.env.FACTORY_CODE;
 var stationNoCus = process.env.STATION_NO_CUS;
@@ -53,7 +52,6 @@ let isOnline = true; // Mặc định là online
 
 ipcMain.on("network-status", (event, status) => {
   isOnline = status; // Cập nhật trạng thái mạng
-  console.log("Network status updated:", isOnline ? "Online" : "Offline");
 });
 
 // Khởi tạo ứng dụng Electron
@@ -77,7 +75,6 @@ app.on("window-all-closed", () => {
   }
 });
 
-console.log("Database Server:", config.server);
 ipcMain.handle(
   "call-stored-procedure",
   async (event, procedureName, params) => {
@@ -197,7 +194,7 @@ ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
           console.error("Error saving to NeDB:", err.message);
           return { success: false, message: "Error saving data locally." };
         }
-        console.log("Saved to NeDB successfully:", newDoc);
+   
       });
       return { success: false, message: "Offline: Data saved locally." };
     } catch (err) {
@@ -274,7 +271,7 @@ ORDER BY COALESCE(r.updated, r.record_time) DESC;
 
 ipcMain.handle("delete-epc-record", async (event, matchkeyid) => {
   try {
-    console.log(matchkeyid, "keyidkeyid");
+
     const pool = await sql.connect(config);
 
     // Tạo truy vấn xóa từ bảng dv_RFIDrecordmst
@@ -328,11 +325,9 @@ ipcMain.handle("show-confirm-dialog", async (event, message) => {
 ipcMain.handle("sync-offline-data", async () => {
   try {
     if (!isOnline) {
-      console.log("Network is still offline. Cannot sync.");
       return { success: false, message: "Network is offline." };
     }
 
-    console.log("Fetching offline data for sync...");
 
     // Lấy tất cả các bản ghi chưa đồng bộ từ NeDB
     const rows = await new Promise((resolve, reject) => {
@@ -343,7 +338,6 @@ ipcMain.handle("sync-offline-data", async () => {
     });
 
     if (rows.length === 0) {
-      console.log("No offline data to sync.");
       return { success: true, message: "No data to sync." };
     }
 
@@ -371,7 +365,6 @@ ipcMain.handle("sync-offline-data", async () => {
             }
           );
         });
-        console.log("Synced record:", row);
       } catch (err) {
         console.error("Error syncing record:", row, err.message);
       }
@@ -381,7 +374,6 @@ ipcMain.handle("sync-offline-data", async () => {
     await new Promise((resolve, reject) => {
       db.remove({ synced: 1 }, { multi: true }, (err, numRemoved) => {
         if (err) return reject(err);
-        console.log(`Deleted ${numRemoved} synced records.`);
         resolve(numRemoved);
       });
     });
@@ -393,3 +385,64 @@ ipcMain.handle("sync-offline-data", async () => {
     return { success: false, message: error.message };
   }
 });
+
+ipcMain.handle("check-assembly-status", async (event, epc) => {
+  try {
+    const pool = await sql.connect(config);
+
+    const query = `
+      SELECT TOP 1 drbd.stationNO  
+      FROM dv_RFIDrecordmst_backup_Daily drbd
+      JOIN dv_rfidmatchmst dr ON dr.keyid = drbd.matchkeyid
+      WHERE dr.EPC_Code = @epc 
+        AND dr.ri_cancel = '0'
+        AND drbd.stationNO LIKE '%p_101%'
+    `;
+
+    const result = await pool
+      .request()
+      .input("epc", sql.NVarChar, epc)
+      .query(query);
+
+    await sql.close();
+
+    const record = result.recordset[0] || null;
+
+    const isMatch =
+      record &&
+      record.stationNO.substring(0, 6).toLowerCase() ===
+        stationNos.substring(0, 6).toLowerCase();
+
+    return { success: true, match: isMatch };
+  } catch (error) {
+    console.error("Database query error:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+
+ipcMain.handle("get-qty-target", async (event, message) => {
+  try {
+    const pool = await sql.connect(config);
+
+    const query = `
+     SELECT TOP 1 a.pr_qty FROM  dv_production_daily a 
+      LEFT JOIN dv_rfidreader b ON a.pr_dept_code  = b.dept_code
+      WHERE a.pr_date = CAST(GETDATE() AS DATE)
+      AND b.device_name = @StationNo;
+    `;
+
+    const result = await pool
+      .request()
+      .input("StationNo", sql.NVarChar, stationNos)
+      .query(query);
+
+    await sql.close();
+
+    return { success: true, record: result.recordset[0] || null };
+  } catch (error) {
+    console.error("Database query error:", error);
+    return { success: false, message: error.message };
+  }
+});
+

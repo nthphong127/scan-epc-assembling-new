@@ -46,6 +46,7 @@ body {
   height: 200px;
   background-color: green;
   text-align: center;
+  border-radius: 15px;
 }
 .box-1-text-bot {
   display: flex;
@@ -55,6 +56,7 @@ body {
   height: 342px;
   background-color: green;
   text-align: center;
+  border-radius: 15px;
 }
 .box-2 {
   /* background-color: red; */
@@ -67,6 +69,7 @@ body {
   width: 230px;
   cursor: pointer;
   margin: 0 auto 10px auto;
+  border-radius: 15px;
 }
 .online {
   background-color: green;

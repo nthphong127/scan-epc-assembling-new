@@ -6,47 +6,82 @@ let isNotificationVisible = false;
 const Datastore = require("nedb");
 const path = require("path");
 const fs = require("fs");
-
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+const lang = process.env.lang || "en";
 // Đường dẫn tới thư mục db và log
 const logDir = path.join(__dirname, "logs");
 const dbDir = path.join(__dirname, "db");
+function loadLang(langCode) {
+  const langFilePath = path.join(__dirname, "lang", `${langCode}.json`);
+  try {
+    const raw = fs.readFileSync(langFilePath, "utf-8");
+    const data = JSON.parse(raw);
+    currentDict = data; // <- gán vào biến toàn cục
+    applyLang(data);
+  } catch (err) {
+    console.error("Không load được file ngôn ngữ:", err);
+  }
+}
+
+function applyLang(dict) {
+  // xử lý theo id như cũ
+  Object.keys(dict).forEach((key) => {
+    // set theo id (nếu có)
+    const el = document.getElementById(key);
+    if (el) el.innerText = dict[key];
+
+    // set theo class (nếu trùng nhiều)
+    const elements = document.querySelectorAll(`.${key}`);
+    elements.forEach((e) => {
+      e.innerText = dict[key];
+    });
+  });
+}
 
 // Hàm lấy ngày hiện tại dạng YYYY-MM-DD
 function getTodayDateStr() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Hàm định dạng lại thời gian theo kiểu "YYYY-MM-DD HH:mm:ss.SSS"
 function formatDate(date) {
-  const pad = (num, size = 2) => String(num).padStart(size, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-         `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+  const pad = (num, size = 2) => String(num).padStart(size, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+      date.getSeconds()
+    )}.${pad(date.getMilliseconds(), 3)}`
+  );
 }
 
 // Hàm ghi log vào file
 function logToFile(filePath, message) {
   const logEntry = {
     message,
-    timestamp: formatDate(new Date())
+    timestamp: formatDate(new Date()),
   };
-  fs.appendFileSync(filePath, JSON.stringify(logEntry) + '\n');
+  fs.appendFileSync(filePath, JSON.stringify(logEntry) + "\n");
 }
 
 // Hàm xóa các file log cũ hơn 3 ngày
 function cleanOldLogs() {
   const todayStr = getTodayDateStr();
   const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 3);  // 3 ngày trước
+  cutoffDate.setDate(cutoffDate.getDate() - 3); // 3 ngày trước
 
-  fs.readdirSync(logDir).forEach(file => {
+  fs.readdirSync(logDir).forEach((file) => {
     if (file.endsWith(".log")) {
-      const fileDateStr = file.split('_')[1].split('.')[0];  // Lấy ngày từ tên file (ví dụ: epc_success_2025-05-05.log)
+      const fileDateStr = file.split("_")[1].split(".")[0]; // Lấy ngày từ tên file (ví dụ: epc_success_2025-05-05.log)
       const fileDate = new Date(fileDateStr);
 
       if (fileDate < cutoffDate) {
-        fs.unlinkSync(path.join(logDir, file));  // Xóa file cũ
-        console.log("Đã xóa file log cũ:", file);
+        fs.unlinkSync(path.join(logDir, file)); // Xóa file cũ
       }
     }
   });
@@ -57,28 +92,38 @@ if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
 // Xóa các file DB cũ không phải ngày hôm nay
-fs.readdirSync(dbDir).forEach(file => {
+fs.readdirSync(dbDir).forEach((file) => {
   const todayStr = getTodayDateStr();
   if (!file.includes(todayStr) && file.endsWith(".db")) {
     fs.unlinkSync(path.join(dbDir, file));
-    console.log("Đã xóa file DB cũ:", file);
   }
 });
 
 // Tạo các DB file theo ngày
-const errorDb = new Datastore({ filename: path.join(dbDir, `errors_${getTodayDateStr()}.db`), autoload: true });
-const lastDb = new Datastore({ filename: path.join(dbDir, `last_${getTodayDateStr()}.db`), autoload: true });
-const db = new Datastore({ filename: path.join(dbDir, `epc_success_${getTodayDateStr()}.db`), autoload: true });
+const errorDb = new Datastore({
+  filename: path.join(dbDir, `errors_${getTodayDateStr()}.db`),
+  autoload: true,
+});
+const lastDb = new Datastore({
+  filename: path.join(dbDir, `last_${getTodayDateStr()}.db`),
+  autoload: true,
+});
+const db = new Datastore({
+  filename: path.join(dbDir, `epc_success_${getTodayDateStr()}.db`),
+  autoload: true,
+});
 
 // Tạo các file log theo ngày
-const successLogFile = path.join(logDir, `epc_success_${getTodayDateStr()}.log`);
+const successLogFile = path.join(
+  logDir,
+  `epc_success_${getTodayDateStr()}.log`
+);
 const failLogFile = path.join(logDir, `epc_fail_${getTodayDateStr()}.log`);
 
 // Xóa các file log cũ hơn 3 ngày
 cleanOldLogs();
 
 let lastList = [];
-
 
 function checkOnlineStatus() {
   const networkButton = document.getElementById("networkButton");
@@ -91,28 +136,26 @@ function checkOnlineStatus() {
     })
       .then((response) => {
         if (response.ok) {
-          statusElement.innerText = "Network Online";
+          statusElement.innerText = currentDict.statusNetworkOnline;
           networkButton.classList.remove("offline");
           networkButton.classList.add("online");
           ipcRenderer.send("network-status", true); // Gửi trạng thái online
           isNotificationVisible = false;
         } else {
-          statusElement.innerText = "Mất kết nối internet";
+          statusElement.innerText = currentDict.statusNetworkOffline;
           networkButton.classList.remove("online");
           networkButton.classList.add("offline");
           ipcRenderer.send("network-status", false);
-   
         }
       })
       .catch(() => {
-        statusElement.innerText = "Mất kết nối internet";
+        statusElement.innerText = currentDict.statusNetworkOffline;
         networkButton.classList.remove("online");
         networkButton.classList.add("offline");
         ipcRenderer.send("network-status", false); // Gửi trạng thái offline
-   
       });
   } else {
-    statusElement.innerText = "Mất kết nối internet";
+    statusElement.innerText = currentDict.statusNetworkOffline;
     networkButton.classList.remove("online");
     networkButton.classList.add("offline");
     ipcRenderer.send("network-status", false); // Gửi trạng thái offline
@@ -182,8 +225,6 @@ async function renderTable() {
   // Lấy dữ liệu từ backend
   const data = await fetchTableData();
 
-  console.log("data", data);
-
   // Hiển thị dữ liệu trong bảng
   tableBody.innerHTML = ""; // Clear existing rows
   data.map((item) => {
@@ -204,7 +245,6 @@ async function renderTable() {
     deleteIcon.classList.add("delete-icon");
     deleteIcon.addEventListener("click", () => {
       const matchkeyid = row.getAttribute("data-keyid");
-      console.log("Deleting row with keyid:", matchkeyid);
       deleteRow(item.EPC_Code, matchkeyid);
     });
     actionCell.appendChild(deleteIcon);
@@ -229,7 +269,6 @@ async function fetchTableData() {
     );
 
     if (result.success) {
-      console.log(result);
       return result.records; // Trả về dữ liệu từ backend
     } else {
       console.error("Error fetching data:", result.message);
@@ -253,7 +292,6 @@ async function deleteRow(epcCode, keyid) {
       const result = await ipcRenderer.invoke("delete-epc-record", keyid);
 
       if (result.success) {
-        console.log(`Deleted EPC Code: ${epcCode}`);
         await renderTable();
         await fetchDataCount();
         epcCodeInput.focus();
@@ -289,90 +327,133 @@ epcCodeInput.addEventListener("input", () => {
       return;
     }
 
+
     // Nếu epcCode có giá trị, gọi stored procedure
     if (epcCode) {
-      addEPCRow(epcCode);
-      console.log("Calling stored procedure with EPC:", epcCode);
-      epcCodeInput.disabled = true;
-      // Gọi hàm trong main process để xử lý stored procedure
+      ipcRenderer.invoke("check-assembly-status", epcCode).then((status) => {
+        if (status.match === false) {
+          const notification = document.createElement("div");
+          notification.className = "notification error";
+          notification.innerText = currentDict.epcNotMatchStation + ` ${epcCode}`;
+          document.body.appendChild(notification);
+          lastList.push(epcCode);
+          errorDb.findOne({ epc: epcCode }, (err, existingError) => {
+            if (err) {
+              console.error("Lỗi DB khi kiểm tra lỗi EPC:", err);
+              return;
+            }
 
-      ipcRenderer
-        .invoke("call-sp-upsert-epc", epcCode)
-        .then((result) => {
-          console.log("Stored procedure result:", result);
-          if (result.success && result.returnValue == 0) {
-            const notification = document.createElement("div");
-            notification.className = "notification error";
-            notification.innerText = `Tem quét chưa được phối hoặc bị lỗi: ${epcCode}`;
-            document.body.appendChild(notification);
-
-            // Ẩn thông báo sau 3 giây
-            setTimeout(() => {
-              notification.remove();
-            }, 5000);
-            errorList.push(epcCode);
-            logToFile(failLogFile, `EPC ${epcCode}`);
-
-            return;
-          }
-          if (result.success && result.returnValue == -1) {
-            const notification = document.createElement("div");
-            notification.className = "notification error";
-            notification.innerText = `Tem đã được quét vào ngày trước đó : ${epcCode}`;
-            document.body.appendChild(notification);
-          
-            lastList.push(epcCode);
-          
-            // Ghi log vào file epc_duplicate.log
-            logToFile(failLogFile, `EPC ${epcCode}`);
-          
-            setTimeout(() => {
-              notification.remove();
-            }, 5000);
-          }
-          if (result.success && result.returnValue === 1) {
-            saveEpcIfNew(epcCode, (err, isNew, doc) => {
-              if (err) {
-                console.error("Lỗi khi lưu DB:", err);
-                return;
-              }
-              if (!isNew) {
-                // Đã quét rồi, hiển thị thông báo
-                const notification = document.createElement("div");
-                notification.className = "notification error";
-                notification.innerText = `Tem đã được quét trong hôm nay: ${epcCode} (Lúc: ${doc.record_time})`;
-                document.body.appendChild(notification);
-                lastList.push(epcCode);
-                setTimeout(() => {
-                  notification.remove();
-                }, 5000);
-              } else {
-                logToFile(successLogFile, `${epcCode}`);
-              }
-            });
-          }
-          
-          renderTable();
-          fetchDataCount();
-          fetchDataCountCus();
-          successAnimation.classList.remove("hidden");
-          successAnimation.classList.add("show");
-
-          // Ẩn animation sau 1.5 giây
-          setTimeout(() => {
-            successAnimation.classList.remove("show");
-            successAnimation.classList.add("hidden");
-          }, 1000);
-        })
-        .catch((error) => {
-          console.error("Error in stored procedure call:", error);
-        })
-        .finally(() => {
+            if (!existingError) {
+              const record = {
+                epc: epcCode,
+                record_time: formatDate(new Date()),
+                reason: 'wrong station',
+              };
+              errorDb.insert(record);
+            }
+          });
           epcCodeInput.disabled = false;
           // epcCodeInput.focus();
           epcCodeInput.value = "";
           epcCodeInput.focus();
-        });
+
+        }
+        addEPCRow(epcCode);
+        epcCodeInput.disabled = true;
+        // Gọi hàm trong main process để xử lý stored procedure
+
+        ipcRenderer
+          .invoke("call-sp-upsert-epc", epcCode)
+          .then(async (result) => {
+            if (result.success && result.returnValue == 0) {
+              const notification = document.createElement("div");
+              notification.className = "notification error";
+              notification.innerText = currentDict.epcNotNatch + epcCode;
+              document.body.appendChild(notification);
+
+              // Ẩn thông báo sau 3 giây
+              setTimeout(() => {
+                notification.remove();
+              }, 5000);
+              errorList.push(epcCode);
+              errorDb.findOne({ epc: epcCode }, (err, existingError) => {
+                if (err) {
+                  console.error("Lỗi DB khi kiểm tra lỗi EPC:", err);
+                  return;
+                }
+    
+                if (!existingError) {
+                  const record = {
+                    epc: epcCode,
+                    record_time: formatDate(new Date()),
+                    reason: "not Match",
+                  };
+                  errorDb.insert(record);
+                }
+              });
+              logToFile(failLogFile, `EPC ${epcCode}`);
+
+              return;
+            }
+            if (result.success && result.returnValue == -1) {
+              const notification = document.createElement("div");
+              notification.className = "notification error";
+              notification.innerText =   currentDict.epcScanPrev +`  ` + epcCode
+              document.body.appendChild(notification);
+
+              lastList.push(epcCode);
+
+              // Ghi log vào file epc_duplicate.log
+              logToFile(failLogFile, `EPC ${epcCode}`);
+
+              setTimeout(() => {
+                notification.remove();
+              }, 5000);
+            }
+            if (result.success && result.returnValue === 1) {
+              saveEpcIfNew(epcCode, (err, isNew, doc) => {
+                if (err) {
+                  console.error("Lỗi khi lưu DB:", err);
+                  return;
+                }
+                if (!isNew) {
+                  // Đã quét rồi, hiển thị thông báo
+                  const notification = document.createElement("div");
+                  notification.className = "notification error";
+                  notification.innerText =  notification.innerText =  currentDict.epcScanToday +epcCode +currentDict.atTime +doc.record_time;
+                  document.body.appendChild(notification);
+                  lastList.push(epcCode);
+                  setTimeout(() => {
+                    notification.remove();
+                  }, 5000);
+                } else {
+                  logToFile(successLogFile, `${epcCode}`);
+                }
+              });
+            }
+
+            renderTable();
+            fetchDataCount();
+            fetchDataCountCus();
+            successAnimation.classList.remove("hidden");
+            successAnimation.classList.add("show");
+
+            // Ẩn animation sau 1.5 giây
+            setTimeout(() => {
+              successAnimation.classList.remove("show");
+              successAnimation.classList.add("hidden");
+            }, 1000);
+          })
+          .catch((error) => {
+            console.error("Error in stored procedure call:", error);
+          })
+          .finally(() => {
+            epcCodeInput.disabled = false;
+            // epcCodeInput.focus();
+            epcCodeInput.value = "";
+            epcCodeInput.focus();
+          });
+      });
     }
 
     // Sau khi xử lý xong, xóa nội dung của input và focus lại
@@ -410,8 +491,6 @@ function addEPCRow(epcCode) {
 }
 
 function syncOfflineData() {
-  console.log("Checking offline data to sync...");
-
   const loadingIndicator = document.getElementById("loading-indicator");
   loadingIndicator.style.display = "flex"; // Hiển thị trạng thái loading
 
@@ -419,7 +498,6 @@ function syncOfflineData() {
     .invoke("sync-offline-data")
     .then((result) => {
       if (result && result.success) {
-        console.log(result.message);
         // alert("Khởi động, và đồng bộ dữ liệu thành công !");
       } else {
         console.error(
@@ -439,19 +517,20 @@ function syncOfflineData() {
 document.addEventListener("DOMContentLoaded", async () => {
   epcCodeInput.focus();
   if (navigator.onLine) {
-    console.log("App started online. Syncing offline data...");
-
     try {
       renderTable();
       fetchDataCountCus();
       fetchDataCount();
-      syncOfflineData(), console.log("All tasks completed successfully.");
+      syncOfflineData();
     } catch (error) {
       console.error("An error occurred during initialization:", error);
     }
   } else {
     console.log("App started offline. No sync will be performed.");
   }
+});
+document.addEventListener("DOMContentLoaded", () => {
+  loadLang(lang);
 });
 
 document.addEventListener("click", (event) => {
@@ -463,7 +542,6 @@ document.addEventListener("click", (event) => {
 });
 
 const stationNo = process.env.STATION_NO;
-console.log("Station Number:", stationNo);
 
 const stationElement = document.querySelector("h2");
 if (stationElement) {
@@ -491,7 +569,7 @@ errorBtn.addEventListener("click", () => {
 function updateErrorTable() {
   errorTableBody.innerHTML = ""; // Xóa nội dung cũ
   if (errorList.length === 0) {
-    errorTableBody.innerHTML = `<tr><td colspan="2">Không có tem lỗi</td></tr>`;
+    errorTableBody.innerHTML = `<tr><td colspan="2">${currentDict.noEpcError}</td></tr>`;
     return;
   }
   errorList.forEach((error, index) => {
@@ -526,7 +604,6 @@ function updateErrorCount() {
     } else {
       const errorCountSpan = document.getElementById("error-count");
       errorCountSpan.textContent = count; // Hiển thị số lượng tem lỗi
-      console.log("Current error count:", count);
     }
   });
 }
@@ -545,7 +622,6 @@ function cleanOldData() {
       if (err) {
         console.error("Có lỗi xảy ra khi xóa dữ liệu:", err);
       } else {
-        console.log(`Đã xóa ${numRemoved} bản ghi cũ.`);
         updateErrorCount();
       }
     }
@@ -563,16 +639,16 @@ function updateErrorTable() {
 
     errorTableBody.innerHTML = ""; // Xóa nội dung cũ
     if (docs.length === 0) {
-      errorTableBody.innerHTML = `<tr><td colspan="2">Không có tem lỗi</td></tr>`;
+      errorTableBody.innerHTML = `<tr><td colspan="2">${currentDict.noEpcError}</td></tr>`;
       return;
     }
 
     docs.forEach((doc, index) => {
       const row = document.createElement("tr");
       row.innerHTML = `
-        <td>${doc.epcCode}</td>
+        <td>${doc.epc}</td>
         <td>
-          <span class="delete-btn" data-id="${doc._id}">Xóa</span>
+          <span >${doc.reason}</span>
         </td>
       `;
       errorTableBody.appendChild(row);
@@ -593,13 +669,11 @@ function removeError(id) {
     if (err) {
       console.error("Failed to remove error from database:", err);
     } else {
-      console.log(`Removed ${numRemoved} error(s) from database.`);
       updateErrorTable(); // Cập nhật lại bảng
       updateErrorCount(); // Cập nhật số lượng
     }
   });
 }
-
 
 const lastBtn = document.querySelector(".last-epc-btn");
 const modalLast = document.getElementById("last-modal");
@@ -611,10 +685,6 @@ lastBtn.addEventListener("click", () => {
   modalLast.style.display = "flex";
 });
 
-
-
-
-
 function updateLastCount() {
   lastDb.count({}, (err, count) => {
     if (err) {
@@ -622,7 +692,6 @@ function updateLastCount() {
     } else {
       const lastCountSpan = document.getElementById("last-count");
       lastCountSpan.textContent = count; // Hiển thị số lượng tem lỗi
-      console.log("Current error count:", count);
     }
   });
 }
@@ -633,7 +702,7 @@ updateLastCount();
 function updateLastTable() {
   lastTableBody.innerHTML = ""; // Xóa nội dung cũ
   if (lastList.length === 0) {
-    lastTableBody.innerHTML = `<tr><td colspan="2">Không có tem lỗi</td></tr>`;
+    lastTableBody.innerHTML = `<tr><td colspan="2">${currentDict.noEpcError}</td></tr>`;
     return;
   }
   lastList.forEach((error, index) => {
@@ -668,7 +737,6 @@ function updateLastCount() {
     } else {
       const lastCountSpan = document.getElementById("last-count");
       lastCountSpan.textContent = count; // Hiển thị số lượng tem lỗi
-      console.log("Current last count:", count);
     }
   });
 }
@@ -685,9 +753,8 @@ function cleanOldDataLast() {
     { multi: true },
     (err, numRemoved) => {
       if (err) {
-        console.error("Có lỗi xảy ra khi xóa dữ liệu:", err);
+        console.error("Error:", err);
       } else {
-        console.log(`Đã xóa ${numRemoved} bản ghi cũ.`);
         updateLastCount();
       }
     }
@@ -707,18 +774,17 @@ function updateLastTable() {
 
     lastTableBody.innerHTML = ""; // Xóa nội dung cũ
     if (docs.length === 0) {
-      lastTableBody.innerHTML = `<tr><td colspan="2">Không có tem lỗi</td></tr>`;
+      lastTableBody.innerHTML = `<tr><td colspan="2">${currentDict.noEpcError}</td></tr>`;
       return;
     }
-
-    console.log(docs,'docs')
-
+    console.log(docs);
+    
     docs.forEach((doc, index) => {
       const row = document.createElement("tr");
       row.innerHTML = `
-        <td>${doc.epcCode}</td>
+        <td>${doc.epc}</td>
         <td>
-          <button disabled class="delete-last-btn" data-id="${doc._id}">Xóa</button>
+          <span class="delete-last-btn" data-id="${doc._id}">${currentDict.delete}</span>
         </td>
       `;
       lastTableBody.appendChild(row);
@@ -739,7 +805,6 @@ function removeLast(id) {
     if (err) {
       console.error("Failed to remove error from database:", err);
     } else {
-      console.log(`Removed ${numRemoved} error(s) from database.`);
       updateLastTable(); // Cập nhật lại bảng
       updateLastCount(); // Cập nhật số lượng
     }
@@ -747,9 +812,15 @@ function removeLast(id) {
 }
 
 function formatDate(date) {
-  const pad = (num, size = 2) => String(num).padStart(size, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-         `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+  const pad = (num, size = 2) => String(num).padStart(size, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate()
+    )} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(
+      date.getSeconds()
+    )}.${pad(date.getMilliseconds(), 3)}`
+  );
 }
 
 function saveEpcIfNew(epc, callback) {
@@ -762,7 +833,7 @@ function saveEpcIfNew(epc, callback) {
     } else {
       const record = {
         epc,
-        record_time: formatDate(new Date())
+        record_time: formatDate(new Date()),
       };
       db.insert(record, (err, newDoc) => {
         if (err) return callback(err);
@@ -772,3 +843,27 @@ function saveEpcIfNew(epc, callback) {
   });
 }
 
+
+async function fetchTargetQty(stationNos) {
+  try {
+    const response = await ipcRenderer.invoke("get-qty-target", stationNos);
+
+    if (response.success && response.record) {
+      console.log("goi thanh cong");
+
+      document.getElementById("target-count").textContent =
+        response.record.pr_qty;
+    } else {
+      console.error("Không có dữ liệu hoặc lỗi:", response.message);
+      document.getElementById("target-count").textContent = "0";
+    }
+  } catch (err) {
+    console.error("Lỗi khi gọi ipcRenderer:", err);
+    document.getElementById("target-count").textContent = "0";
+  }
+}
+
+fetchTargetQty();
+setInterval(() => {
+  fetchTargetQty(stationNos);
+}, 2 * 60 * 60 * 1000);
