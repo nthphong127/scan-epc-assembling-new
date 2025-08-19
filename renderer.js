@@ -327,15 +327,20 @@ epcCodeInput.addEventListener("input", () => {
       return;
     }
 
-
     // Nếu epcCode có giá trị, gọi stored procedure
     if (epcCode) {
       ipcRenderer.invoke("check-assembly-status", epcCode).then((status) => {
+        console.log(status.match);
+
         if (status.match === false) {
-          const notification = document.createElement("div");
-          notification.className = "notification error";
-          notification.innerText = currentDict.epcNotMatchStation + ` ${epcCode}`;
-          document.body.appendChild(notification);
+          const notificationCenter = document.createElement("div");
+          notificationCenter.className = "notificationCenter error";
+          // notificationCenter.innerText = currentDict.epcNotMatchStation + ` ${epcCode}`;
+          notificationCenter.innerHTML = `
+<svg fill="#000000" width="34px" height="34px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <rect id="Icons" x="-640" y="-64" width="1280" height="800" style="fill:none;"></rect> <g id="Icons1" serif:id="Icons"> <g id="Strike"> </g> <g id="H1"> </g> <g id="H2"> </g> <g id="H3"> </g> <g id="list-ul"> </g> <g id="hamburger-1"> </g> <g id="hamburger-2"> </g> <g id="list-ol"> </g> <g id="list-task"> </g> <g id="trash"> </g> <g id="vertical-menu"> </g> <g id="horizontal-menu"> </g> <g id="sidebar-2"> </g> <g id="Pen"> </g> <g id="Pen1" serif:id="Pen"> </g> <g id="clock"> </g> <g id="external-link"> </g> <g id="hr"> </g> <g id="info"> </g> <g id="warning"> <path d="M32.427,7.987c2.183,0.124 4,1.165 5.096,3.281l17.936,36.208c1.739,3.66 -0.954,8.585 -5.373,8.656l-36.119,0c-4.022,-0.064 -7.322,-4.631 -5.352,-8.696l18.271,-36.207c0.342,-0.65 0.498,-0.838 0.793,-1.179c1.186,-1.375 2.483,-2.111 4.748,-2.063Zm-0.295,3.997c-0.687,0.034 -1.316,0.419 -1.659,1.017c-6.312,11.979 -12.397,24.081 -18.301,36.267c-0.546,1.225 0.391,2.797 1.762,2.863c12.06,0.195 24.125,0.195 36.185,0c1.325,-0.064 2.321,-1.584 1.769,-2.85c-5.793,-12.184 -11.765,-24.286 -17.966,-36.267c-0.366,-0.651 -0.903,-1.042 -1.79,-1.03Z" style="fill-rule:nonzero;"></path> <path d="M33.631,40.581l-3.348,0l-0.368,-16.449l4.1,0l-0.384,16.449Zm-3.828,5.03c0,-0.609 0.197,-1.113 0.592,-1.514c0.396,-0.4 0.935,-0.601 1.618,-0.601c0.684,0 1.223,0.201 1.618,0.601c0.395,0.401 0.593,0.905 0.593,1.514c0,0.587 -0.193,1.078 -0.577,1.473c-0.385,0.395 -0.929,0.593 -1.634,0.593c-0.705,0 -1.249,-0.198 -1.634,-0.593c-0.384,-0.395 -0.576,-0.886 -0.576,-1.473Z" style="fill-rule:nonzero;"></path> </g> <g id="plus-circle"> </g> <g id="minus-circle"> </g> <g id="vue"> </g> <g id="cog"> </g> <g id="logo"> </g> <g id="radio-check"> </g> <g id="eye-slash"> </g> <g id="eye"> </g> <g id="toggle-off"> </g> <g id="shredder"> </g> <g id="spinner--loading--dots-" serif:id="spinner [loading, dots]"> </g> <g id="react"> </g> <g id="check-selected"> </g> <g id="turn-off"> </g> <g id="code-block"> </g> <g id="user"> </g> <g id="coffee-bean"> </g> <g id="coffee-beans"> <g id="coffee-bean1" serif:id="coffee-bean"> </g> </g> <g id="coffee-bean-filled"> </g> <g id="coffee-beans-filled"> <g id="coffee-bean2" serif:id="coffee-bean"> </g> </g> <g id="clipboard"> </g> <g id="clipboard-paste"> </g> <g id="clipboard-copy"> </g> <g id="Layer1"> </g> </g> </g></svg>
+  ${currentDict.epcNotMatchStation} ${epcCode}
+`;
+          document.body.appendChild(notificationCenter);
           lastList.push(epcCode);
           errorDb.findOne({ epc: epcCode }, (err, existingError) => {
             if (err) {
@@ -347,16 +352,18 @@ epcCodeInput.addEventListener("input", () => {
               const record = {
                 epc: epcCode,
                 record_time: formatDate(new Date()),
-                reason: 'wrong station',
+                reason: "Sai trạm(扫错站点)",
               };
               errorDb.insert(record);
             }
           });
+          setTimeout(() => {
+            notificationCenter.remove();
+          }, 5000);
           epcCodeInput.disabled = false;
           // epcCodeInput.focus();
           epcCodeInput.value = "";
           epcCodeInput.focus();
-
         }
         addEPCRow(epcCode);
         epcCodeInput.disabled = true;
@@ -381,7 +388,7 @@ epcCodeInput.addEventListener("input", () => {
                   console.error("Lỗi DB khi kiểm tra lỗi EPC:", err);
                   return;
                 }
-    
+
                 if (!existingError) {
                   const record = {
                     epc: epcCode,
@@ -392,20 +399,20 @@ epcCodeInput.addEventListener("input", () => {
                 }
               });
               logToFile(failLogFile, `EPC ${epcCode}`);
-
+            
               return;
             }
             if (result.success && result.returnValue == -1) {
               const notification = document.createElement("div");
               notification.className = "notification error";
-              notification.innerText =   currentDict.epcScanPrev +`  ` + epcCode
+              notification.innerText = currentDict.epcScanPrev + `  ` + epcCode;
               document.body.appendChild(notification);
 
               lastList.push(epcCode);
 
               // Ghi log vào file epc_duplicate.log
               logToFile(failLogFile, `EPC ${epcCode}`);
-
+        
               setTimeout(() => {
                 notification.remove();
               }, 5000);
@@ -419,8 +426,7 @@ epcCodeInput.addEventListener("input", () => {
                 if (!isNew) {
                   // Đã quét rồi, hiển thị thông báo
                   const notification = document.createElement("div");
-                  notification.className = "notification error";
-                  notification.innerText =  notification.innerText =  currentDict.epcScanToday +epcCode +currentDict.atTime +doc.record_time;
+                  notification.className = "  error";
                   document.body.appendChild(notification);
                   lastList.push(epcCode);
                   setTimeout(() => {
@@ -435,6 +441,8 @@ epcCodeInput.addEventListener("input", () => {
             renderTable();
             fetchDataCount();
             fetchDataCountCus();
+            updateErrorCount();
+            updateLastCount();
             successAnimation.classList.remove("hidden");
             successAnimation.classList.add("show");
 
@@ -730,18 +738,7 @@ window.addEventListener("click", (event) => {
 });
 
 // Hàm cập nhật số lượng tem lỗi
-function updateLastCount() {
-  lastDb.count({}, (err, count) => {
-    if (err) {
-      console.error("Failed to count errors in database:", err);
-    } else {
-      const lastCountSpan = document.getElementById("last-count");
-      lastCountSpan.textContent = count; // Hiển thị số lượng tem lỗi
-    }
-  });
-}
 
-updateLastCount();
 // xóa error cuối ngày
 
 function cleanOldDataLast() {
@@ -778,7 +775,7 @@ function updateLastTable() {
       return;
     }
     console.log(docs);
-    
+
     docs.forEach((doc, index) => {
       const row = document.createElement("tr");
       row.innerHTML = `
@@ -843,13 +840,12 @@ function saveEpcIfNew(epc, callback) {
   });
 }
 
-
-async function fetchTargetQty(stationNos) {
+async function fetchTargetQty() {
   try {
-    const response = await ipcRenderer.invoke("get-qty-target", stationNos);
+    const response = await ipcRenderer.invoke("get-qty-target");
 
     if (response.success && response.record) {
-      console.log("goi thanh cong");
+      console.log("goi qty target thanh cong");
 
       document.getElementById("target-count").textContent =
         response.record.pr_qty;
@@ -865,5 +861,5 @@ async function fetchTargetQty(stationNos) {
 
 fetchTargetQty();
 setInterval(() => {
-  fetchTargetQty(stationNos);
-}, 2 * 60 * 60 * 1000);
+  fetchTargetQty();
+}, 30 * 60 * 1000);

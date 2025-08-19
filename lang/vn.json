@@ -23,5 +23,5 @@
   "statusNetworkOnline": "Network Status: Online",
   "statusNetworkOffline": "Network Status: Offline",
     "qty-cus" : "Số lượng đóng gói",
-    "epcNotMatchStation": "Tem bị quét sai trạm"
+    "epcNotMatchStation": "Tem này đã được quét ở trạm đầu chuyền khác"
 }

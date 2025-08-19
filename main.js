@@ -8,8 +8,14 @@ const {
 const sql = require("mssql");
 const Datastore = require("nedb");
 const path = require("path");
+const fs = require("fs"); // Import module file system
 
-const dbPath = path.join(__dirname, "offline.db");
+const dbDir = path.join(__dirname, "db");
+if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+
+// 👉 Sửa dòng này để file nằm trong folder 'db'
+const dbPath = path.join(dbDir, "offline.db");
+
 const db = new Datastore({ filename: dbPath, autoload: true });
 
 require("dotenv").config({ path: `${__dirname}/.env` });
@@ -159,7 +165,7 @@ WHERE
     return { success: false, message: error.message };
   }
 });
-const fs = require("fs"); // Import module file system
+
 
 const logDir = path.join(__dirname, "log");
 function getCurrentDateString() {
@@ -174,28 +180,41 @@ const logFilePath = path.join(
   `epc_success_${getCurrentDateString()}.log`
 );
 
-// Kiểm tra nếu thư mục log chưa tồn tại thì tạo mới
-// if (!fs.existsSync(logDir)) {
-//   fs.mkdirSync(logDir, { recursive: true });
-//   console.log("Created log directory:", logDir);
-// }
+
 ipcMain.handle("call-sp-upsert-epc", async (event, epc, stationNo) => {
   if (!isOnline) {
     try {
       const record = {
         epc,
         stationNos,
-        ipLocal,
-        synced: 0, // Chưa đồng bộ
-        created_at: new Date().toISOString(),
+        ipLocal: "offline",
+        synced: 0,
+        created_at: new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString(),
       };
-      db.insert(record, (err, newDoc) => {
-        if (err) {
-          console.error("Error saving to NeDB:", err.message);
-          return { success: false, message: "Error saving data locally." };
-        }
-   
+
+      const existing = await new Promise((resolve, reject) => {
+        db.findOne({ epc, synced: 0 }, (err, doc) => {
+          if (err) return reject(err);
+          resolve(doc);
+        });
       });
+
+      if (existing) {
+        console.log("Duplicate EPC (unsynced), skipping insert:", epc);
+        return {
+          success: false,
+          message: "Duplicate EPC (unsynced), skipped.",
+        };
+      }
+
+      const inserted = await new Promise((resolve, reject) => {
+        db.insert(record, (err, newDoc) => {
+          if (err) return reject(err);
+          resolve(newDoc);
+        });
+      });
+
+      console.log("Saved to NeDB successfully:", inserted);
       return { success: false, message: "Offline: Data saved locally." };
     } catch (err) {
       console.error("Error saving to NeDB:", err.message);
@@ -325,63 +344,54 @@ ipcMain.handle("show-confirm-dialog", async (event, message) => {
 ipcMain.handle("sync-offline-data", async () => {
   try {
     if (!isOnline) {
+      console.log("Network is still offline. Cannot sync.");
       return { success: false, message: "Network is offline." };
     }
 
-
-    // Lấy tất cả các bản ghi chưa đồng bộ từ NeDB
+    // Lấy tất cả các bản ghi offline chưa xử lý
     const rows = await new Promise((resolve, reject) => {
-      db.find({ synced: 0 }, (err, docs) => {
+      db.find({}, (err, docs) => {
         if (err) return reject(err);
         resolve(docs);
       });
     });
 
     if (rows.length === 0) {
+      console.log("No offline data to sync.");
       return { success: true, message: "No data to sync." };
     }
 
     const pool = await sql.connect(config);
 
-    // Đồng bộ từng bản ghi
     for (const row of rows) {
       try {
         await pool
           .request()
           .input("EPC", sql.NVarChar, row.epc)
           .input("StationNo", sql.NVarChar, row.stationNos)
-          .input("IP", sql.NVarChar, row.ip)
+          .input("IP", sql.NVarChar, row.ipLocal ?? "offline")
+          .input("record_time", sql.DateTime, new Date(row.created_at))
           .execute("SP_UpsertEpcRecord_phong");
 
-        // Cập nhật trạng thái bản ghi là đã đồng bộ
+        // Xóa bản ghi sau khi insert thành công
         await new Promise((resolve, reject) => {
-          db.update(
-            { _id: row._id },
-            { $set: { synced: 1 } },
-            {},
-            (err, numReplaced) => {
-              if (err) return reject(err);
-              resolve(numReplaced);
-            }
-          );
+          db.remove({ _id: row._id }, {}, (err, numRemoved) => {
+            if (err) return reject(err);
+            resolve(numRemoved);
+          });
         });
+
+        console.log("Synced & removed record:", row);
       } catch (err) {
-        console.error("Error syncing record:", row, err.message);
+        console.error("❌ Error syncing record:", row, err.message);
+        // Không xóa nếu lỗi
       }
     }
-
-    // Xóa các bản ghi đã đồng bộ
-    await new Promise((resolve, reject) => {
-      db.remove({ synced: 1 }, { multi: true }, (err, numRemoved) => {
-        if (err) return reject(err);
-        resolve(numRemoved);
-      });
-    });
 
     await sql.close();
     return { success: true, message: "Sync completed successfully." };
   } catch (error) {
-    console.error("Error during sync:", error.message);
+    console.error("❌ Error during sync:", error.message);
     return { success: false, message: error.message };
   }
 });

@@ -23,5 +23,5 @@
   "statusNetworkOnline": "网络状态：在线",
   "statusNetworkOffline": "网络状态：离线",
       "qty-cus" : "包装数量",
-       "epcNotMatchStation": "扫错站点的标签"
+       "epcNotMatchStation": "此标签已在其他成型投放站扫过"
 }

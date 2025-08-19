@@ -22,5 +22,6 @@
   "atTime": "At",
   "statusNetworkOnline": "Network Status: Online",
   "statusNetworkOffline": "Network Status: Offline",
-      "qty-cus" : "包装数量"
+  "qty-cus": "包装数量",
+  "epcNotMatchStation": "Wrong station"
 }
